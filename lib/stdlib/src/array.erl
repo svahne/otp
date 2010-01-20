@@ -129,7 +129,8 @@
 %% per write than base 10, but the speedup is only 21%.)
 
 -define(DEFAULT, undefined).
--define(LEAFSIZE, 10).		% the "base"
+-define(LEAFSIZE, 10).		       % the "base"
+-define(OPTIMIZE_FOR_BASE_10, yes).   % Undefine if base is not 10
 -define(NODESIZE, ?LEAFSIZE).   % (no reason to have a different size)
 -define(NODEPATTERN(S), {_,_,_,_,_,_,_,_,_,_,S}). % NODESIZE+1 elements!
 -define(NEW_NODE(S),  % beware of argument duplication!
@@ -648,6 +649,26 @@ get(I, #array{size = N, max = M, elements = E, default = D})
 get(_I, _A) ->
     erlang:error(badarg).
 
+-ifdef(OPTIMIZE_FOR_BASE_10).
+
+-define(DIGIT_OFFSET, $/).
+get_1(I, {E1,_,_,_,_,_,_,_,_,_,S}, D) when I < S ->
+    get_1(I, E1, D);
+get_1(I, E, D) ->
+    tuple_lookup(integer_to_list(I), E, D).
+    
+tuple_lookup([], E, _) -> E;
+
+tuple_lookup([ Digit | R ], E={_,_,_,_,_,_,_,_,_,_,_}, D) -> 
+    tuple_lookup(R, element(Digit - ?DIGIT_OFFSET, E), D);
+
+tuple_lookup([ Digit | R ], E={_,_,_,_,_,_,_,_,_,_}, D) -> 
+    tuple_lookup(R, element(Digit - ?DIGIT_OFFSET, E), D);
+
+tuple_lookup(_, _, D) -> D.
+
+-else.
+
 %% The use of NODEPATTERN(S) to select the right clause is just a hack,
 %% but it is the only way to get the maximum speed out of this loop
 %% (using the Beam compiler in OTP 11).
@@ -659,6 +680,7 @@ get_1(_I, E, D) when is_integer(E) ->
 get_1(I, E, _D) ->
     element(I+1, E).
 
+-endif.
 
 %% @spec (integer(), array()) -> array()
 %% @doc Reset entry `I' to the default value for the array. 
